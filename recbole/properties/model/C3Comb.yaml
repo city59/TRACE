@@ -1,0 +1,35 @@
+hidden_size: 32
+initializer_range: 0.02
+
+# Dataset token for the supervised target behavior. The number of behavior
+# types is inferred from the dataset vocabulary rather than hard-coded.
+target_behavior_token: '0'
+
+# Candidate-wise training set: one positive plus a configurable number of
+# negatives. Failed hard slots are redistributed over the catalog components
+# and audited. The default 32 is an implementation hyperparameter, not a
+# constraint on the dataset evaluation protocol.
+combo_negatives: 32
+combo_uniform_weight: 0.333333
+combo_pop_weight: 0.333333
+combo_hard_weight: 0.333334
+combo_pop_alpha: 0.75
+
+# Exact Gibbs structured inference and calibrated cosine prediction.  The
+# default positive edge kernel is separable, which preserves the complete
+# subsequence space while reducing inference from O(T^2) to O(T).
+combo_linear_kernel: 1
+combo_kernel_channels: 8
+# Exact vectorized rank-one kernel. Set to 0 for the more expressive
+# multi-channel O(T) recurrence used as an ablation.
+combo_closed_form_kernel: 1
+combo_length_bucket: 1
+combo_temperature: 0.7
+combo_min_temperature: 0.05
+combo_logit_scale: 8.0
+combo_learnable_scale: 1
+
+# Candidate blocks reduce peak memory while every valid prefix event remains
+# in the exact dynamic program.
+combo_candidate_chunk_size: 64
+report_repeat_groups: true

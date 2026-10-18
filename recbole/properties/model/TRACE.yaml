@@ -1,0 +1,18 @@
+# TRACE default hyperparameters (Sec. 5.1 "Parameter Settings").
+hidden_size: 64                 # embedding dimension d
+path_temperature: 0.4           # tau, searched in {0.1, 0.2, 0.4, 0.6, 0.8, 1.0}
+n_path_blocks: 2                # J, searched in {1, 2, 3, 4, 5}
+max_alternatives: 6             # Omega (non-MAP paths), searched in {1, 2, 4, 6, 8, 10}
+reg_weight: 0.0001              # lambda_reg of the L2 term in Eq. (16)
+target_behavior_token: '0'      # dataset token of the target behavior b* (purchase)
+
+# Not specified in the paper; implementation defaults.
+n_heads: 10                     # H attention heads per block (head size ceil(d/H))
+inner_size: 256                 # feed-forward width of each path transformer block
+dropout_prob: 0.1
+layer_norm_eps: 1e-12
+train_neg_num: 1                # |I_u^-|, uniformly sampled training negatives
+candidate_chunk_size: 64        # candidates scored together (memory only)
+train_micro_batch: 256          # rows per checkpointed micro-batch (memory only; one optimizer step per batch)
+trace_ablation: none            # none | wo_N | wo_E | wo_F | map_only | soft_only |
+                                # wo_bias | wo_cq | wo_tf | wo_gru | shared_A
