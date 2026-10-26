@@ -54,55 +54,7 @@ The paper repeats each experiment with 10 seeds:
 for s in 0 1 2 3 4 5 6 7 8 9; do python run_TRACE.py --dataset retail_beh --seed $s; done
 ```
 
-## Hyperparameters
 
-Settings from the paper (Sec. 5.1), used as defaults:
-
-| Parameter | Value |
-|---|---|
-| Optimizer | AdamW, learning rate 1e-3 |
-| Embedding size d | 64 |
-| Batch size | 2048 |
-| Initialization | Xavier |
-| L2 coefficient λ_reg | 1e-4 (added to the loss, Eq. 16) |
-| Path temperature τ | searched in {0.1, 0.2, 0.4, 0.6, 0.8, 1.0} |
-| Transformer blocks J | searched in {1, 2, 3, 4, 5} |
-| Max non-MAP paths Ω | searched in {1, 2, 4, 6, 8, 10} |
-
-Best values per dataset (Sec. 5.4), applied automatically:
-
-| Dataset | τ | J | Ω |
-|---|---|---|---|
-| Retailrocket | 0.4 | 2 | 2 |
-| Taobao | 0.4 | 2 | 6 |
-| IJCAI | 0.6 | 3 | 8 |
-
-Override them with `--tau`, `--blocks` and `--omega`. Other options are listed in `python run_TRACE.py -h` and `recbole/properties/model/TRACE.yaml`.
-
-## Ablations (Sec. 5.3)
-
-Use `--ablation <name>`:
-
-| Name | Variant |
-|---|---|
-| `wo_N` / `wo_E` / `wo_F` | set N, E or F to zero |
-| `map_only` | Ω = 0 |
-| `soft_only` | remove the MAP branch |
-| `wo_bias` | remove log R from attention |
-| `wo_cq` | remove z_c from the attention query |
-| `wo_tf` | remove the path transformer (mean of path inputs) |
-| `wo_gru` | cumulative sums of interaction embeddings instead of the GRU |
-| `shared_A` | one projection A shared across behaviors |
-
-## Code structure
-
-| File | Content |
-|---|---|
-| `recbole/model/sequential_recommender/trace.py` | TRACE model (Eqs. 1–16) |
-| `recbole/properties/model/TRACE.yaml` | default hyperparameters |
-| `run_TRACE.py` | training / evaluation entry point |
-| `tests/test_trace.py` | checks the DP against brute-force path enumeration |
-| `scripts/prepare_datasets.py` | unpacks and verifies the bundled datasets |
 
 Run the tests with:
 
