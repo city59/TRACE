@@ -1,7 +1,5 @@
 # TRACE
 
-Code for **Target Reasoning via Adaptive Combinatorial Evidence Optimization for Recommendation** (TRACE).
-
 For every candidate item, TRACE scores ordered historical paths by event relevance (N), transition compatibility (E) and endpoint support (F). Exact dynamic programming retrieves the MAP path and the top-Ω alternatives, and a suffix DP gives the next-link probabilities η. A structure-guided path transformer then encodes each path. Finally, a learned gate fuses the MAP score and the utility-weighted alternative score.
 
 The code is built on [RecBole](https://github.com/RUCAIBox/RecBole) and the [MBHT](https://github.com/yuh-yang/MBHT-KDD22) data pipeline.
