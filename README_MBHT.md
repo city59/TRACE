@@ -8,10 +8,7 @@ The code is built on Pytorch and the [RecBole](https://github.com/RUCAIBox/RecBo
 
 
 ## Datasets
-- Download the three public datasets we use in the paper at:
-  https://drive.google.com/file/d/1OFT_5Xp_az-GSHIl7QEPB9zhulbooLzE/view?usp=sharing
-
-- Unzip the datasets and move them to **./dataset/**
+- The three preprocessed datasets are included in this repository; run `python scripts/prepare_datasets.py` to unpack them into **./dataset/**.
 
 - You may also refer to the raw data here :)
 

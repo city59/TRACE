@@ -1,2 +1,4 @@
 # Keep line endings consistent across platforms
 * text=auto eol=lf
+*.xz binary
+*.part[0-9][0-9] binary

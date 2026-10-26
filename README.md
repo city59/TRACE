@@ -16,13 +16,19 @@ Tested with Python 3.9 and PyTorch 1.12 (CUDA).
 
 ## Datasets
 
-Download the MBHT datasets ([Google Drive](https://drive.google.com/file/d/1OFT_5Xp_az-GSHIl7QEPB9zhulbooLzE/view?usp=sharing)) and unzip them into `./dataset/`:
+The three datasets (preprocessed as in MBHT) are included in this repository. Retailrocket is stored as plain files. Taobao and IJCAI exceed GitHub's file size limit, so they are stored as xz-compressed archives in `dataset/archives/`. Unpack them once before running:
 
-| Paper name   | Folder       | Behaviors                      |
-|--------------|--------------|--------------------------------|
-| Taobao       | `tmall_beh`  | purchase, cart, favorite, view |
-| Retailrocket | `retail_beh` | purchase, cart, view           |
-| IJCAI        | `ijcai_beh`  | purchase, cart, favorite, view |
+```bash
+python scripts/prepare_datasets.py
+```
+
+The script extracts the archives into `./dataset/` and verifies every file against `dataset/archives/SHA256SUMS`.
+
+| Paper name   | Folder       | Behaviors                      | Stored as |
+|--------------|--------------|--------------------------------|-----------|
+| Taobao       | `tmall_beh`  | purchase, cart, favorite, view | `tmall_beh.tar.xz` |
+| Retailrocket | `retail_beh` | purchase, cart, view           | plain files |
+| IJCAI        | `ijcai_beh`  | purchase, cart, favorite, view | `ijcai_beh.tar.xz.part00`, `.part01` |
 
 Behavior token `0` is the target behavior (purchase). If a dataset has an `item_time_list` field, its timestamps are used for the temporal costs. Otherwise the historical position is used as the time unit.
 
@@ -96,6 +102,7 @@ Use `--ablation <name>`:
 | `recbole/properties/model/TRACE.yaml` | default hyperparameters |
 | `run_TRACE.py` | training / evaluation entry point |
 | `tests/test_trace.py` | checks the DP against brute-force path enumeration |
+| `scripts/prepare_datasets.py` | unpacks and verifies the bundled datasets |
 
 Run the tests with:
 
