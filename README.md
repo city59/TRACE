@@ -65,7 +65,7 @@ python run_TRACE.py --dataset taobao --gpu_id 0
 python run_TRACE.py --dataset ijcai --gpu_id 0
 ```
 
-`--dataset` accepts only these three datasets. Logs, checkpoints and a result JSON are written to `run_artifacts/trace/`. Each run reports HR@10 and NDCG@10 on the test targets, using the checkpoint with the best validation NDCG@10. The random seed is fixed (2026).
+`--dataset` accepts only these three datasets. Logs, checkpoints and a result JSON are written to `run_artifacts/trace/`. Each run reports HR@10 and NDCG@10 on the test targets, using the checkpoint with the best validation NDCG@10.
 
 ## Hyperparameters
 
