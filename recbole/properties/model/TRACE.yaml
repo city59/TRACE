@@ -4,7 +4,7 @@ n_path_blocks: 2
 max_alternatives: 6
 target_behavior_token: '0'
 
-n_heads: 10
+n_heads: 8
 inner_size: 256
 dropout_prob: 0.1
 layer_norm_eps: 1e-12
