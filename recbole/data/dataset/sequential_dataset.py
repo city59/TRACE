@@ -1,17 +1,3 @@
-# @Time   : 2020/9/16
-# @Author : Yushuo Chen
-# @Email  : chenyushuo@ruc.edu.cn
-
-# UPDATE:
-# @Time   : 2020/9/16, 2021/7/1, 2021/7/11
-# @Author : Yushuo Chen, Xingyu Pan, Yupeng Hou
-# @Email  : chenyushuo@ruc.edu.cn, xy_pan@foxmail.com, houyupeng@ruc.edu.cn
-
-"""
-recbole.data.sequential_dataset
-###############################
-"""
-
 import numpy as np
 import torch
 
@@ -21,15 +7,6 @@ from recbole.utils.enum_type import FeatureType, FeatureSource
 
 
 class SequentialDataset(Dataset):
-    """:class:`SequentialDataset` is based on :class:`~recbole.data.dataset.dataset.Dataset`,
-    and provides augmentation interface to adapt to Sequential Recommendation,
-    which can accelerate the data loader.
-
-    Attributes:
-        max_item_list_len (int): Max length of historical item list.
-        item_list_length_field (str): Field name for item lists' length.
-    """
-
     def __init__(self, config):
         self.max_item_list_len = config['MAX_ITEM_LIST_LENGTH']
         self.item_list_length_field = config['ITEM_LIST_LENGTH_FIELD']
@@ -38,9 +15,6 @@ class SequentialDataset(Dataset):
             self._benchmark_presets()
 
     def _change_feat_format(self):
-        """Change feat format from :class:`pandas.DataFrame` to :class:`Interaction`,
-           then perform data augmentation.
-        """
         super()._change_feat_format()
 
         if self.config['benchmark_filename'] is not None:
@@ -71,22 +45,6 @@ class SequentialDataset(Dataset):
         self.set_field_property(self.item_list_length_field, FeatureType.TOKEN, FeatureSource.INTERACTION, 1)
 
     def data_augmentation(self):
-        """Augmentation processing for sequential dataset.
-
-        E.g., ``u1`` has purchase sequence ``<i1, i2, i3, i4>``,
-        then after augmentation, we will generate three cases.
-
-        ``u1, <i1> | i2``
-
-        (Which means given user_id ``u1`` and item_seq ``<i1>``,
-        we need to predict the next item ``i2``.)
-
-        The other cases are below:
-
-        ``u1, <i1, i2> | i3``
-
-        ``u1, <i1, i2, i3> | i4``
-        """
         self.logger.debug('data_augmentation')
 
         self._aug_presets()
@@ -146,19 +104,6 @@ class SequentialDataset(Dataset):
         self.inter_feat[self.item_list_length_field] = self.inter_feat[self.item_id_list_field].agg(len)
 
     def inter_matrix(self, form='coo', value_field=None):
-        """Get sparse matrix that describe interactions between user_id and item_id.
-        Sparse matrix has shape (user_num, item_num).
-        For a row of <src, tgt>, ``matrix[src, tgt] = 1`` if ``value_field`` is ``None``,
-        else ``matrix[src, tgt] = self.inter_feat[src, tgt]``.
-
-        Args:
-            form (str, optional): Sparse matrix format. Defaults to ``coo``.
-            value_field (str, optional): Data of sparse matrix, which should exist in ``df_feat``.
-                Defaults to ``None``.
-
-        Returns:
-            scipy.sparse: Sparse matrix in form ``coo`` or ``csr``.
-        """
         if not self.uid_field or not self.iid_field:
             raise ValueError('dataset does not exist uid/iid, thus can not converted to sparse matrix.')
 
@@ -177,16 +122,6 @@ class SequentialDataset(Dataset):
         return self._create_sparse_matrix(local_inter_feat, self.uid_field, self.iid_field, form, value_field)
 
     def build(self):
-        """Processing dataset according to evaluation setting, including Group, Order and Split.
-        See :class:`~recbole.config.eval_setting.EvalSetting` for details.
-
-        Args:
-            eval_setting (:class:`~recbole.config.eval_setting.EvalSetting`):
-                Object contains evaluation settings, which guide the data processing procedure.
-
-        Returns:
-            list: List of built :class:`Dataset`.
-        """
         ordering_args = self.config['eval_args']['order']
         if ordering_args != 'TO':
             raise ValueError(f'The ordering args for sequential recommendation has to be \'TO\'')

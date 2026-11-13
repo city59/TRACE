@@ -1,29 +1,3 @@
-"""Build the TRACE benchmarks from the raw interaction logs.
-
-Protocol (Sec. 3 and Sec. 5.1 of the paper):
-  * every interaction keeps its item, behavior type and timestamp; interactions of a user are
-    ordered chronologically, and interactions sharing a timestamp keep the original recorded
-    order of the raw log;
-  * timestamps are converted to hours, a consistent time unit across the three datasets;
-  * chronological leave-one-out: each user's most recent purchase is the test target, the
-    second most recent purchase is the validation target, and every earlier purchase (if any)
-    is a training target. The history of a target is the sequence of interactions before it;
-  * every validation and test target is ranked against 100 distinct negative items sampled
-    according to item popularity in the training portion (all interactions before each user's
-    validation target). The negatives are fixed here, so every model sees the same candidates.
-
-Filtering (Sec. 5.1): items with fewer than 5 interactions and users with fewer than 2 purchases
-are removed, repeatedly until both conditions hold. Each stored history keeps the most recent 200
-interactions. These settings and the negative-sampling seed are fixed below.
-
-Raw files:
-  taobao        UserBehavior.csv(.zip)    user,item,category,behavior,timestamp(s)  (Tianchi 649)
-  retailrocket  events.csv                timestamp(ms),visitorid,event,itemid,...   (Kaggle)
-  ijcai         data_format1.zip          user_log_format1.csv, time_stamp = mmdd    (Tianchi 47)
-
-Example:
-  python scripts/preprocess.py --source retailrocket --input path/to/events.csv
-"""
 import argparse
 import io
 import json
@@ -34,13 +8,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-# Behavior tokens; token 0 is the target behavior (purchase).
 PURCHASE, CART, FAVORITE, VIEW = 0, 1, 2, 3
 BEHAVIOR_NAMES = {PURCHASE: 'purchase', CART: 'cart', FAVORITE: 'favorite', VIEW: 'view'}
 CHUNK = 5_000_000
 
 MIN_ITEM_INTERACTIONS = 5
-MIN_PURCHASES = 2          # leave-one-out needs a validation and a test purchase
+MIN_PURCHASES = 2
 MAX_HISTORY = 200
 NUM_NEGATIVES = 100
 SEED = 2026
@@ -48,7 +21,6 @@ OUTPUT_ROOT = Path(__file__).resolve().parents[1] / 'dataset'
 
 
 def open_member(path, member):
-    """Open a csv either directly or as a member of a zip archive."""
     path = Path(path)
     if path.suffix == '.zip':
         archive = zipfile.ZipFile(path)
@@ -93,7 +65,6 @@ def load_retailrocket(path):
 
 def load_ijcai(path):
     mapping = {2: PURCHASE, 1: CART, 3: FAVORITE, 0: VIEW}
-    # time_stamp is mmdd within 2014 (the logs end on Double 11, 2014): day resolution only.
     day_of_year = {}
     users, items, behaviors, hours = [], [], [], []
     with open_member(path, 'user_log_format1.csv') as handle:
@@ -131,7 +102,6 @@ def filter_log(user, item, behavior, min_item, min_purchase):
 
 
 def sample_negatives(rng, cumulative, item_ids, positive, count):
-    """`count` distinct items drawn according to popularity, excluding the positive."""
     chosen = []
     seen = {positive}
     while len(chosen) < count:
@@ -150,7 +120,7 @@ def fmt_tokens(values):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser()
     parser.add_argument('--source', choices=sorted(LOADERS), required=True)
     parser.add_argument('--input', type=Path, required=True)
     args = parser.parse_args()
@@ -167,13 +137,11 @@ def main():
 
     keep = filter_log(user, item, behavior, MIN_ITEM_INTERACTIONS, MIN_PURCHASES)
     user, item, behavior, hours = user[keep], item[keep], behavior[keep], hours[keep]
-    # Chronological order per user; the stable sort keeps the recorded order for equal times.
     order = np.lexsort((hours, user))
     user, item, behavior, hours = user[order], item[order], behavior[order], hours[order]
     starts = np.flatnonzero(np.r_[True, user[1:] != user[:-1]])
     ends = np.r_[starts[1:], len(user)]
 
-    # Popularity over the training portion: interactions before each user's validation target.
     in_train = np.zeros(len(user), dtype=bool)
     for s, e in zip(starts, ends):
         purchases = s + np.flatnonzero(behavior[s:e] == PURCHASE)
@@ -195,7 +163,7 @@ def main():
         splits = ['train'] * (len(targets) - 2) + ['valid', 'test']
         for pos, split in zip(targets, splits):
             if pos == 0:
-                continue                      # a target needs a non-empty history
+                continue
             lo = max(0, pos - MAX_HISTORY)
             negatives = '' if split == 'train' else fmt_tokens(sample_negatives(
                 rng, cumulative, pop_items, u_items[pos], NUM_NEGATIVES))

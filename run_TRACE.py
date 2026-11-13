@@ -1,9 +1,3 @@
-"""Train and evaluate TRACE with the settings of Sec. 5.1 of the paper.
-
-Example:
-    python run_TRACE.py --dataset retailrocket --gpu_id 0
-"""
-
 import argparse
 import json
 import os
@@ -18,8 +12,6 @@ from recbole.data.utils import create_samplers, get_dataloader
 from recbole.utils import get_model, get_trainer, init_logger, init_seed, set_color
 
 
-# Path temperature tau, transformer blocks G and non-MAP paths Omega per dataset (Sec. 5.4);
-# the datasets are built from the raw logs by scripts/preprocess.py.
 DATASET_PRESETS = {
     'taobao': {'path_temperature': 0.4, 'n_path_blocks': 2, 'max_alternatives': 6},
     'retailrocket': {'path_temperature': 0.4, 'n_path_blocks': 2, 'max_alternatives': 2},
@@ -33,7 +25,6 @@ def get_args():
     parser.add_argument('--dataset', '-d', type=str, default='retailrocket',
                         choices=sorted(DATASET_PRESETS))
     parser.add_argument('--gpu_id', type=int, default=0)
-    # Memory-only settings; they do not change the results.
     parser.add_argument('--eval_batch_size', type=int, default=256,
                         help='Evaluation instances per batch (each has 1 + 100 candidates).')
     parser.add_argument('--micro_batch', type=int, default=256,
@@ -50,13 +41,9 @@ def main():
         'USER_ID_FIELD': 'session_id',
         'load_col': None,
         'neg_sampling': None,
-        # Chronological leave-one-out (Sec. 5.1): train / valid / test targets are each user's
-        # earlier, second most recent and most recent purchases.
         'benchmark_filename': ['train', 'valid', 'test'],
         'alias_of_item_id': ['item_id_list', 'neg_item_list'],
         'MAX_ITEM_LIST_LENGTH': 200,
-        # Every valid/test target is ranked against its 100 popularity-sampled negatives stored
-        # in neg_item_list; TRACE.customized_sort_predict scores these candidates.
         'eval_args': {'mode': 'full', 'order': 'TO'},
         'metrics': ['Hit', 'NDCG'],
         'topk': [10],
@@ -66,16 +53,11 @@ def main():
         'seed': SEED,
         'reproducibility': True,
         'show_progress': False,
-        # Early stopping on validation NDCG@10.
         'epochs': 200,
         'stopping_step': 10,
         'min_delta': 0.0,
         'learner': 'adamw',
-        # Sec. 5.1: AdamW, learning rate 1e-3, batch size 2048; d, lambda_reg and the number of
-        # training negatives are in recbole/properties/model/TRACE.yaml.
         'learning_rate': 1e-3,
-        # The L2 term lambda_reg * ||Theta||^2 is part of the loss (Eq. 14),
-        # so the optimizer's decoupled weight decay is disabled.
         'weight_decay': 0.0,
         'train_batch_size': 2048,
         'eval_batch_size': args.eval_batch_size,

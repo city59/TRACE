@@ -1,22 +1,3 @@
-# @Time   : 2020/6/26
-# @Author : Shanlei Mu
-# @Email  : slmu@ruc.edu.cn
-
-# UPDATE:
-# @Time   : 2021/6/23, 2020/9/26, 2020/9/26, 2020/10/01, 2020/9/16
-# @Author : Zihan Lin, Yupeng Hou, Yushuo Chen, Shanlei Mu, Xingyu Pan
-# @Email  : zhlin@ruc.edu.cn, houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, slmu@ruc.edu.cn, panxy@ruc.edu.cn
-
-# UPDATE:
-# @Time   : 2020/10/8, 2020/10/15, 2020/11/20, 2021/2/20, 2021/3/3, 2021/3/5, 2021/7/18
-# @Author : Hui Wang, Xinyan Fan, Chen Yang, Yibo Li, Lanling Xu, Haoran Cheng, Zhichao Feng
-# @Email  : hui.wang@ruc.edu.cn, xinyan.fan@ruc.edu.cn, 254170321@qq.com, 2018202152@ruc.edu.cn, xulanling_sherry@163.com, chenghaoran29@foxmail.com, fzcbupt@gmail.com
-
-r"""
-recbole.trainer.trainer
-################################
-"""
-
 import os
 import math
 from logging import getLogger
@@ -36,7 +17,6 @@ from recbole.utils import ensure_dir, get_local_time, early_stopping, calculate_
 
 
 def warmup_cosine_multiplier(step, warmup_steps, total_steps):
-    """Linear warm-up followed by cosine decay, expressed per optimizer step."""
     total_steps = max(int(total_steps), 1)
     warmup_steps = min(max(int(warmup_steps), 0), total_steps - 1)
     step = min(max(int(step), 0), total_steps)
@@ -49,8 +29,6 @@ def warmup_cosine_multiplier(step, warmup_steps, total_steps):
 
 
 class RepeatGroupMetricAccumulator(object):
-    """Streaming candidate-ranking metrics for repeat/non-repeat targets."""
-
     def __init__(self, topk):
         self.topk = sorted(set(int(value) for value in topk))
         self.counts = {'overall': 0, 'repeat': 0, 'nonrepeat': 0}
@@ -134,44 +112,18 @@ class RepeatGroupMetricAccumulator(object):
 
 
 class AbstractTrainer(object):
-    r"""Trainer Class is used to manage the training and evaluation processes of recommender system models.
-    AbstractTrainer is an abstract class in which the fit() and evaluate() method should be implemented according
-    to different training and evaluation strategies.
-    """
-
     def __init__(self, config, model):
         self.config = config
         self.model = model
 
     def fit(self, train_data):
-        r"""Train the model based on the train data.
-
-        """
         raise NotImplementedError('Method [next] should be implemented.')
 
     def evaluate(self, eval_data):
-        r"""Evaluate the model based on the eval data.
-
-        """
-
         raise NotImplementedError('Method [next] should be implemented.')
 
 
 class Trainer(AbstractTrainer):
-    r"""The basic Trainer for basic training and evaluation strategies in recommender systems. This class defines common
-    functions for training and evaluation processes of most recommender system models, including fit(), evaluate(),
-    resume_checkpoint() and some other features helpful for model training and evaluation.
-
-    Generally speaking, this class can serve most recommender system models, If the training process of the model is to
-    simply optimize a single loss without involving any complex training strategies, such as adversarial learning,
-    pre-training and so on.
-
-    Initializing the Trainer needs two parameters: `config` and `model`. `config` records the parameters information
-    for controlling training and evaluation, such as `learning_rate`, `epochs`, `eval_step` and so on.
-    `model` is the instantiated object of a Model Class.
-
-    """
-
     def __init__(self, config, model):
         super(Trainer, self).__init__(config, model)
 
@@ -222,11 +174,6 @@ class Trainer(AbstractTrainer):
         self.tot_item_num = None
 
     def _build_optimizer(self, params):
-        r"""Init the Optimizer
-
-        Returns:
-            torch.optim: the optimizer
-        """
         if self.config['reg_weight'] and self.weight_decay and self.weight_decay * self.config['reg_weight'] > 0:
             self.logger.warning(
                 'The parameters [weight_decay] and [reg_weight] are specified simultaneously, '
@@ -273,20 +220,6 @@ class Trainer(AbstractTrainer):
             self._pending_scheduler_state = None
 
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
-        r"""Train the model in an epoch
-
-        Args:
-            train_data (DataLoader): The train data.
-            epoch_idx (int): The current epoch id.
-            loss_func (function): The loss function of :attr:`model`. If it is ``None``, the loss function will be
-                :attr:`self.model.calculate_loss`. Defaults to ``None``.
-            show_progress (bool): Show the progress of training epoch. Defaults to ``False``.
-
-        Returns:
-            float/tuple: The sum of loss returned by all batches in this epoch. If the loss in each batch contains
-            multiple parts and the model return these multiple parts loss instead of the sum of loss, it will return a
-            tuple which includes the sum of loss in each part.
-        """
         self.model.train()
         self._ensure_lr_scheduler(train_data)
         loss_func = loss_func or self.model.calculate_loss
@@ -319,32 +252,15 @@ class Trainer(AbstractTrainer):
                 self.lr_scheduler.step()
             self.global_train_step += 1
             if self.gpu_available and show_progress:
-                # iter_data.set_postfix_str(set_color('GPU RAM: ' + get_gpu_usage(self.device), 'yellow'))
                 pass
         return total_loss
 
     def _valid_epoch(self, valid_data, show_progress=False):
-        r"""Valid the model with valid data
-
-        Args:
-            valid_data (DataLoader): the valid data.
-            show_progress (bool): Show the progress of evaluate epoch. Defaults to ``False``.
-
-        Returns:
-            float: valid score
-            dict: valid result
-        """
         valid_result = self.evaluate(valid_data, load_best_model=False, show_progress=show_progress)
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
 
     def _save_checkpoint(self, epoch):
-        r"""Store the model parameters information and training information.
-
-        Args:
-            epoch (int): the current epoch id
-
-        """
         state = {
             'config': self.config,
             'epoch': epoch,
@@ -363,12 +279,6 @@ class Trainer(AbstractTrainer):
         torch.save(state, self.saved_model_file)
 
     def resume_checkpoint(self, resume_file):
-        r"""Load the model parameters information and training information.
-
-        Args:
-            resume_file (file): the checkpoint file
-
-        """
         resume_file = str(resume_file)
         self.saved_model_file = resume_file
         checkpoint = torch.load(resume_file)
@@ -376,7 +286,6 @@ class Trainer(AbstractTrainer):
         self.cur_step = checkpoint['cur_step']
         self.best_valid_score = checkpoint['best_valid_score']
 
-        # load architecture params from checkpoint
         if checkpoint['config']['model'].lower() != self.config['model'].lower():
             self.logger.warning(
                 'Architecture configuration given in config file is different from that of checkpoint. '
@@ -385,7 +294,6 @@ class Trainer(AbstractTrainer):
         self.model.load_state_dict(checkpoint['state_dict'])
         self.model.load_other_parameter(checkpoint.get('other_parameter'))
 
-        # load optimizer state from checkpoint only when optimizer type is not changed
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         self.global_train_step = int(checkpoint.get('global_train_step', 0))
         self.total_train_steps = checkpoint.get('total_train_steps')
@@ -419,18 +327,15 @@ class Trainer(AbstractTrainer):
             self.tensorboard.add_scalar(tag, losses, epoch_idx)
 
     def _add_hparam_to_tensorboard(self, best_valid_result):
-        # base hparam
         hparam_dict = {
             'learner': self.config['learner'],
             'learning_rate': self.config['learning_rate'],
             'train_batch_size': self.config['train_batch_size']
         }
-        # unrecorded parameter
         unrecorded_parameter = {
             parameter
             for parameters in self.config.parameters.values() for parameter in parameters
         }.union({'model', 'dataset', 'config_files', 'device'})
-        # other model-specific hparam
         hparam_dict.update({
             para: val
             for para, val in self.config.final_config_dict.items() if para not in unrecorded_parameter
@@ -442,21 +347,6 @@ class Trainer(AbstractTrainer):
         self.tensorboard.add_hparams(hparam_dict, {'hparam/best_valid_result': best_valid_result})
 
     def fit(self, train_data, valid_data=None, verbose=True, saved=True, show_progress=False, callback_fn=None):
-        r"""Train the model based on the train data and the valid data.
-
-        Args:
-            train_data (DataLoader): the train data
-            valid_data (DataLoader, optional): the valid data, default: None.
-                                               If it's None, the early_stopping is invalid.
-            verbose (bool, optional): whether to write training and evaluation information to logger, default: True
-            saved (bool, optional): whether to save the model parameters, default: True
-            show_progress (bool): Show the progress of training epoch and evaluate epoch. Defaults to ``False``.
-            callback_fn (callable): Optional callback function executed at end of epoch.
-                                    Includes (epoch_idx, valid_score) input arguments.
-
-        Returns:
-             (float, dict): best valid score and best valid result. If valid_data is None, it returns (-1, None)
-        """
         if saved and self.start_epoch >= self.epochs:
             self._save_checkpoint(self.start_epoch - 1)
 
@@ -472,10 +362,6 @@ class Trainer(AbstractTrainer):
         self.logger.info(valid_score_output)
         self.logger.info(valid_result_output)
 
-        # Treat the pre-training evaluation as a legitimate model-selection
-        # candidate.  This is essential for warm-started residual modules:
-        # fine-tuning must never discard a stronger initialization merely
-        # because the first optimization step made validation worse.
         self.best_valid_score = valid_score
         self.best_valid_result = valid_result
         self.cur_step = 0
@@ -488,26 +374,6 @@ class Trainer(AbstractTrainer):
                 )
 
         for epoch_idx in range(self.start_epoch, self.epochs):
-            # valid_start_time = time()
-            # valid_score, valid_result = self._valid_epoch(valid_data, show_progress=show_progress)
-            # self.best_valid_score, self.cur_step, stop_flag, update_flag = early_stopping(
-            #     valid_score,
-            #     self.best_valid_score,
-            #     self.cur_step,
-            #     max_step=self.stopping_step,
-            #     bigger=self.valid_metric_bigger
-            # )
-            # valid_end_time = time()
-            # valid_score_output = (set_color("epoch %d evaluating", 'green') + " [" + set_color("time", 'blue')
-            #                     + ": %.2fs, " + set_color("valid_score", 'blue') + ": %f]") % \
-            #                         (epoch_idx, valid_end_time - valid_start_time, valid_score)
-            # valid_result_output = set_color('valid result', 'blue') + ': \n' + dict2str(valid_result)
-            # if verbose:
-            #     self.logger.info(valid_score_output)
-            #     self.logger.info(valid_result_output)
-            # self.tensorboard.add_scalar('Vaild_score', valid_score, epoch_idx)
-
-            # train
             training_start_time = time()
             train_loss = self._train_epoch(train_data, epoch_idx, show_progress=show_progress)
             self.train_loss_dict[epoch_idx] = sum(train_loss) if isinstance(train_loss, tuple) else train_loss
@@ -516,9 +382,7 @@ class Trainer(AbstractTrainer):
                 self._generate_train_loss_output(epoch_idx, training_start_time, training_end_time, train_loss)
             if verbose:
                 self.logger.info(train_loss_output)
-            # self._add_train_loss_to_tensorboard(epoch_idx, train_loss)
 
-            # eval
             if self.eval_step <= 0 or not valid_data:
                 if saved:
                     self._save_checkpoint(epoch_idx)
@@ -570,7 +434,6 @@ class Trainer(AbstractTrainer):
     def _full_sort_batch_eval(self, batched_data):
         interaction, history_index, positive_u, positive_i = batched_data
         try:
-            # Note: interaction without item ids
             scores = self.model.full_sort_predict(interaction.to(self.device))
         except NotImplementedError:
             inter_len = len(interaction)
@@ -618,19 +481,6 @@ class Trainer(AbstractTrainer):
 
     @torch.no_grad()
     def evaluate(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
-        r"""Evaluate the model based on the eval data.
-
-        Args:
-            eval_data (DataLoader): the eval data
-            load_best_model (bool, optional): whether load the best model in the training process, default: True.
-                                              It should be set True, if users want to test the model after training.
-            model_file (str, optional): the saved model file, default: None. If users want to test the previously
-                                        trained model file, they can set this parameter.
-            show_progress (bool): Show the progress of evaluate epoch. Defaults to ``False``.
-
-        Returns:
-            dict: eval result, key is the eval metric and value in the corresponding metric value.
-        """
         if not eval_data:
             return
 
@@ -719,19 +569,6 @@ class Trainer(AbstractTrainer):
 
     @torch.no_grad()
     def evaluate_no_log(self, eval_data, load_best_model=True, model_file=None, show_progress=False):
-        r"""Evaluate the model based on the eval data.
-
-        Args:
-            eval_data (DataLoader): the eval data
-            load_best_model (bool, optional): whether load the best model in the training process, default: True.
-                                              It should be set True, if users want to test the model after training.
-            model_file (str, optional): the saved model file, default: None. If users want to test the previously
-                                        trained model file, they can set this parameter.
-            show_progress (bool): Show the progress of evaluate epoch. Defaults to ``False``.
-
-        Returns:
-            dict: eval result, key is the eval metric and value in the corresponding metric value.
-        """
         if not eval_data:
             return
 
@@ -778,7 +615,6 @@ class Trainer(AbstractTrainer):
             if origin_scores.ndim == 1:
                 origin_scores = origin_scores.unsqueeze(0)
             score_results.append(origin_scores)
-            # attn_scores.append(attn_score[0].squeeze())
         scores = torch.cat(score_results, dim=0)
         return scores
 
@@ -800,11 +636,6 @@ class Trainer(AbstractTrainer):
 
 
 class KGTrainer(Trainer):
-    r"""KGTrainer is designed for Knowledge-aware recommendation methods. Some of these models need to train the
-    recommendation related task and knowledge related task alternately.
-
-    """
-
     def __init__(self, config, model):
         super(KGTrainer, self).__init__(config, model)
 
@@ -829,25 +660,18 @@ class KGTrainer(Trainer):
 
 
 class KGATTrainer(Trainer):
-    r"""KGATTrainer is designed for KGAT, which is a knowledge-aware recommendation method.
-
-    """
-
     def __init__(self, config, model):
         super(KGATTrainer, self).__init__(config, model)
 
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
-        # train rs
         train_data.set_mode(KGDataLoaderState.RS)
         rs_total_loss = super()._train_epoch(train_data, epoch_idx, show_progress=show_progress)
 
-        # train kg
         train_data.set_mode(KGDataLoaderState.KG)
         kg_total_loss = super()._train_epoch(
             train_data, epoch_idx, loss_func=self.model.calculate_kg_loss, show_progress=show_progress
         )
 
-        # update A
         self.model.eval()
         with torch.no_grad():
             self.model.update_attentive_A()
@@ -856,23 +680,12 @@ class KGATTrainer(Trainer):
 
 
 class PretrainTrainer(Trainer):
-    r"""PretrainTrainer is designed for pre-training.
-    It can be inherited by the trainer which needs pre-training and fine-tuning.
-    """
-
     def __init__(self, config, model):
         super(PretrainTrainer, self).__init__(config, model)
         self.pretrain_epochs = self.config['pretrain_epochs']
         self.save_step = self.config['save_step']
 
     def save_pretrained_model(self, epoch, saved_model_file):
-        r"""Store the model parameters information and training information.
-
-        Args:
-            epoch (int): the current epoch id
-            saved_model_file (str): file name for saved pretrained model
-
-        """
         state = {
             'config': self.config,
             'epoch': epoch,
@@ -883,7 +696,6 @@ class PretrainTrainer(Trainer):
 
     def pretrain(self, train_data, verbose=True, show_progress=False):
         for epoch_idx in range(self.start_epoch, self.pretrain_epochs):
-            # train
             training_start_time = time()
             train_loss = self._train_epoch(train_data, epoch_idx, show_progress=show_progress)
             self.train_loss_dict[epoch_idx] = sum(train_loss) if isinstance(train_loss, tuple) else train_loss
@@ -908,11 +720,6 @@ class PretrainTrainer(Trainer):
 
 
 class S3RecTrainer(PretrainTrainer):
-    r"""S3RecTrainer is designed for S3Rec, which is a self-supervised learning based sequential recommenders.
-        It includes two training stages: pre-training ang fine-tuning.
-
-        """
-
     def __init__(self, config, model):
         super(S3RecTrainer, self).__init__(config, model)
 
@@ -926,10 +733,6 @@ class S3RecTrainer(PretrainTrainer):
 
 
 class MKRTrainer(Trainer):
-    r"""MKRTrainer is designed for MKR, which is a knowledge-aware recommendation method.
-
-    """
-
     def __init__(self, config, model):
         super(MKRTrainer, self).__init__(config, model)
         self.kge_interval = config['kge_interval']
@@ -937,14 +740,12 @@ class MKRTrainer(Trainer):
     def _train_epoch(self, train_data, epoch_idx, loss_func=None, show_progress=False):
         rs_total_loss, kg_total_loss = 0., 0.
 
-        # train rs
         self.logger.info('Train RS')
         train_data.set_mode(KGDataLoaderState.RS)
         rs_total_loss = super()._train_epoch(
             train_data, epoch_idx, loss_func=self.model.calculate_rs_loss, show_progress=show_progress
         )
 
-        # train kg
         if epoch_idx % self.kge_interval == 0:
             self.logger.info('Train KG')
             train_data.set_mode(KGDataLoaderState.KG)
@@ -956,20 +757,12 @@ class MKRTrainer(Trainer):
 
 
 class TraditionalTrainer(Trainer):
-    r"""TraditionalTrainer is designed for Traditional model(Pop,ItemKNN), which set the epoch to 1 whatever the config.
-
-    """
-
     def __init__(self, config, model):
         super(TraditionalTrainer, self).__init__(config, model)
-        self.epochs = 1  # Set the epoch to 1 when running memory based model
+        self.epochs = 1
 
 
 class DecisionTreeTrainer(AbstractTrainer):
-    """DecisionTreeTrainer is designed for DecisionTree model.
-
-    """
-
     def __init__(self, config, model):
         super(DecisionTreeTrainer, self).__init__(config, model)
 
@@ -978,7 +771,6 @@ class DecisionTreeTrainer(AbstractTrainer):
         self.label_field = config['LABEL_FIELD']
         self.convert_token_to_onehot = self.config['convert_token_to_onehot']
 
-        # evaluator
         self.eval_type = config['eval_type']
         self.epochs = config['epochs']
         self.eval_step = min(config['eval_step'], self.epochs)
@@ -986,7 +778,6 @@ class DecisionTreeTrainer(AbstractTrainer):
         self.eval_collector = Collector(config)
         self.evaluator = Evaluator(config)
 
-        # model saved
         self.checkpoint_dir = config['checkpoint_dir']
         ensure_dir(self.checkpoint_dir)
         temp_file = '{}-{}-temp.pth'.format(self.config['model'], get_local_time())
@@ -1005,14 +796,6 @@ class DecisionTreeTrainer(AbstractTrainer):
         self.best_valid_result = None
 
     def _interaction_to_sparse(self, dataloader):
-        r"""Convert data format from interaction to sparse or numpy
-
-        Args:
-            dataloader (DecisionTreeDataLoader): DecisionTreeDataLoader dataloader.
-        Returns:
-            cur_data (sparse or numpy): data.
-            interaction_np[self.label_field] (numpy): label.
-        """
         interaction = dataloader.dataset[:]
         interaction_np = interaction.numpy()
         cur_data = np.array([])
@@ -1059,22 +842,11 @@ class DecisionTreeTrainer(AbstractTrainer):
         pass
 
     def _valid_epoch(self, valid_data):
-        r"""
-
-        Args:
-            valid_data (DecisionTreeDataLoader): DecisionTreeDataLoader, which is the same with GeneralDataLoader.
-        """
         valid_result = self.evaluate(valid_data, load_best_model=False)
         valid_score = calculate_valid_score(valid_result, self.valid_metric)
         return valid_score, valid_result
 
     def _save_checkpoint(self, epoch):
-        r"""Store the model parameters information and training information.
-
-        Args:
-            epoch (int): the current epoch id
-
-        """
         state = {
             'config': self.config,
             'epoch': epoch,
@@ -1090,7 +862,6 @@ class DecisionTreeTrainer(AbstractTrainer):
             self._train_at_once(train_data, valid_data)
 
             if (epoch_idx + 1) % self.eval_step == 0:
-                # evaluate
                 valid_start_time = time()
                 valid_score, valid_result = self._valid_epoch(valid_data)
 
@@ -1140,10 +911,6 @@ class DecisionTreeTrainer(AbstractTrainer):
 
 
 class xgboostTrainer(DecisionTreeTrainer):
-    """xgboostTrainer is designed for XGBOOST.
-
-    """
-
     def __init__(self, config, model):
         super(xgboostTrainer, self).__init__(config, model)
 
@@ -1152,7 +919,6 @@ class xgboostTrainer(DecisionTreeTrainer):
         self.silent = config['xgb_silent']
         self.nthread = config['xgb_nthread']
 
-        # train params
         self.params = config['xgb_params']
         self.num_boost_round = config['xgb_num_boost_round']
         self.evals = ()
@@ -1164,23 +930,10 @@ class xgboostTrainer(DecisionTreeTrainer):
         self.eval_pred = self.eval_true = None
 
     def _interaction_to_lib_datatype(self, dataloader):
-        r"""Convert data format from interaction to DMatrix
-
-        Args:
-            dataloader (DecisionTreeDataLoader): xgboost dataloader.
-        Returns:
-            DMatrix: Data in the form of 'DMatrix'.
-        """
         data, label = self._interaction_to_sparse(dataloader)
         return self.xgb.DMatrix(data=data, label=label, silent=self.silent, nthread=self.nthread)
 
     def _train_at_once(self, train_data, valid_data):
-        r"""
-
-        Args:
-            train_data (DecisionTreeDataLoader): DecisionTreeDataLoader, which is the same with GeneralDataLoader.
-            valid_data (DecisionTreeDataLoader): DecisionTreeDataLoader, which is the same with GeneralDataLoader.
-        """
         self.dtrain = self._interaction_to_lib_datatype(train_data)
         self.dvalid = self._interaction_to_lib_datatype(valid_data)
         self.evals = [(self.dtrain, 'train'), (self.dvalid, 'valid')]
@@ -1217,10 +970,6 @@ class xgboostTrainer(DecisionTreeTrainer):
 
 
 class lightgbmTrainer(DecisionTreeTrainer):
-    """lightgbmTrainer is designed for lightgbm.
-
-    """
-
     def __init__(self, config, model):
         super(lightgbmTrainer, self).__init__(config, model)
 
@@ -1228,7 +977,6 @@ class lightgbmTrainer(DecisionTreeTrainer):
         self.boost_model = config['lgb_model']
         self.silent = config['lgb_silent']
 
-        # train params
         self.params = config['lgb_params']
         self.num_boost_round = config['lgb_num_boost_round']
         self.evals = ()
@@ -1241,23 +989,10 @@ class lightgbmTrainer(DecisionTreeTrainer):
         self.eval_pred = self.eval_true = None
 
     def _interaction_to_lib_datatype(self, dataloader):
-        r"""Convert data format from interaction to Dataset
-
-        Args:
-            dataloader (DecisionTreeDataLoader): xgboost dataloader.
-        Returns:
-            dataset(lgb.Dataset): Data in the form of 'lgb.Dataset'.
-        """
         data, label = self._interaction_to_sparse(dataloader)
         return self.lgb.Dataset(data=data, label=label, silent=self.silent)
 
     def _train_at_once(self, train_data, valid_data):
-        r"""
-
-        Args:
-            train_data (DecisionTreeDataLoader): DecisionTreeDataLoader, which is the same with GeneralDataLoader.
-            valid_data (DecisionTreeDataLoader): DecisionTreeDataLoader, which is the same with GeneralDataLoader.
-        """
         self.dtrain = self._interaction_to_lib_datatype(train_data)
         self.dvalid = self._interaction_to_lib_datatype(valid_data)
         self.evals = [self.dtrain, self.dvalid]
@@ -1295,11 +1030,6 @@ class lightgbmTrainer(DecisionTreeTrainer):
 
 
 class RaCTTrainer(PretrainTrainer):
-    r"""RaCTTrainer is designed for RaCT, which is an actor-critic reinforcement learning based general recommenders.
-        It includes three training stages: actor pre-training, critic pre-training and actor-critic training.
-
-        """
-
     def __init__(self, config, model):
         super(RaCTTrainer, self).__init__(config, model)
 
@@ -1318,10 +1048,6 @@ class RaCTTrainer(PretrainTrainer):
 
 
 class RecVAETrainer(Trainer):
-    r"""RecVAETrainer is designed for RecVAE, which is a general recommender.
-
-    """
-
     def __init__(self, config, model):
         super(RecVAETrainer, self).__init__(config, model)
         self.n_enc_epochs = config['n_enc_epochs']

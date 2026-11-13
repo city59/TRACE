@@ -1,17 +1,3 @@
-# @Time   : 2020/6/28
-# @Author : Zihan Lin
-# @Email  : linzihan.super@foxmail.com
-
-# UPDATE
-# @Time   : 2020/10/04, 2021/3/2, 2021/2/17, 2021/6/30
-# @Author : Shanlei Mu, Yupeng Hou, Jiawei Guan, Xingyu Pan
-# @Email  : slmu@ruc.edu.cn, houyupeng@ruc.edu.cn, Guanjw@ruc.edu.cn, xy_pan@foxmail.com
-
-"""
-recbole.config.configurator
-################################
-"""
-
 import re
 import os
 import sys
@@ -25,46 +11,7 @@ from recbole.utils import get_model, Enum, EvaluatorType, ModelType, InputType, 
 
 
 class Config(object):
-    """ Configurator module that load the defined parameters.
-
-    Configurator module will first load the default parameters from the fixed properties in RecBole and then
-    load parameters from the external input.
-
-    External input supports three kind of forms: config file, command line and parameter dictionaries.
-
-    - config file: It's a file that record the parameters to be modified or added. It should be in ``yaml`` format,
-      e.g. a config file is 'example.yaml', the content is:
-
-        learning_rate: 0.001
-
-        train_batch_size: 2048
-
-    - command line: It should be in the format as '---learning_rate=0.001'
-
-    - parameter dictionaries: It should be a dict, where the key is parameter name and the value is parameter value,
-      e.g. config_dict = {'learning_rate': 0.001}
-
-    Configuration module allows the above three kind of external input format to be used together,
-    the priority order is as following:
-
-    command line > parameter dictionaries > config file
-
-    e.g. If we set learning_rate=0.01 in config file, learning_rate=0.02 in command line,
-    learning_rate=0.03 in parameter dictionaries.
-
-    Finally the learning_rate is equal to 0.02.
-    """
-
     def __init__(self, model=None, dataset=None, config_file_list=None, config_dict=None):
-        """
-        Args:
-            model (str/AbstractRecommender): the model name or the model class, default is None, if it is None, config
-            will search the parameter 'model' from the external input as the model name or model class.
-            dataset (str): the dataset name, default is None, if it is None, config will search the parameter 'dataset'
-            from the external input as the dataset name.
-            config_file_list (list of str): the external config file, it allows multiple config files, default is None.
-            config_dict (dict): the external parameter dictionaries, default is None.
-        """
         self._init_parameters_category()
         self.yaml_loader = self._build_yaml_loader()
         self.file_config_dict = self._load_config_files(config_file_list)
@@ -104,9 +51,6 @@ class Config(object):
         return loader
 
     def _convert_config_dict(self, config_dict):
-        r"""This function convert the str parameters to their original type.
-
-        """
         for key in config_dict:
             param = config_dict[key]
             if not isinstance(param, str):
@@ -137,15 +81,9 @@ class Config(object):
         return file_config_dict
 
     def _load_variable_config_dict(self, config_dict):
-        # HyperTuning may set the parameters such as mlp_hidden_size in NeuMF in the format of ['[]', '[]']
-        # then config_dict will receive a str '[]', but indeed it's a list []
-        # temporarily use _convert_config_dict to solve this problem
         return self._convert_config_dict(config_dict) if config_dict else dict()
 
     def _load_cmd_line(self):
-        r""" Read parameters from command line and convert it to str.
-
-        """
         cmd_config_dict = dict()
         unrecognized_args = []
         if "ipykernel_launcher" not in sys.argv[0]:
@@ -172,7 +110,6 @@ class Config(object):
         self.external_config_dict = external_config_dict
 
     def _get_model_and_dataset(self, model, dataset):
-
         if model is None:
             try:
                 model = self.external_config_dict['model']
@@ -324,7 +261,6 @@ class Config(object):
             if isinstance(ad_suf, str):
                 self.final_config_dict['additional_feat_suffix'] = [ad_suf]
 
-        # eval_args checking
         default_eval_args = {
             'split': {'RS': [0.8, 0.1, 0.1]},
             'order': 'RO',

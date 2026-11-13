@@ -1,17 +1,3 @@
-# @Time   : 2020/7/7
-# @Author : Yupeng Hou
-# @Email  : houyupeng@ruc.edu.cn
-
-# UPDATE
-# @Time   : 2020/9/9, 2020/9/29, 2021/7/15
-# @Author : Yupeng Hou, Yushuo Chen, Xingyu Pan
-# @email  : houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn, xy_pan@foxmail.com
-
-"""
-recbole.data.dataloader.general_dataloader
-################################################
-"""
-
 import numpy as np
 import torch
 
@@ -21,18 +7,6 @@ from recbole.utils import InputType, ModelType
 
 
 class TrainDataLoader(NegSampleDataLoader):
-    """:class:`TrainDataLoader` is a dataloader for training.
-    It can generate negative interaction when :attr:`training_neg_sample_num` is not zero.
-    For the result of every batch, we permit that every positive interaction and its negative interaction
-    must be in the same batch.
-
-    Args:
-        config (Config): The config of dataloader.
-        dataset (Dataset): The dataset of dataloader.
-        sampler (Sampler): The sampler of dataloader.
-        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
-    """
-
     def __init__(self, config, dataset, sampler, shuffle=False):
         self._set_neg_sample_args(config, dataset, config['MODEL_INPUT_TYPE'], config['train_neg_sample_args'])
         super().__init__(config, dataset, sampler, shuffle=shuffle)
@@ -82,18 +56,6 @@ class TrainDataLoader(NegSampleDataLoader):
 
 
 class NegSampleEvalDataLoader(NegSampleDataLoader):
-    """:class:`NegSampleEvalDataLoader` is a dataloader for neg-sampling evaluation.
-    It is similar to :class:`TrainDataLoader` which can generate negative items,
-    and this dataloader also permits that all the interactions corresponding to each user are in the same batch
-    and positive interactions are before negative interactions.
-
-    Args:
-        config (Config): The config of dataloader.
-        dataset (Dataset): The dataset of dataloader.
-        sampler (Sampler): The sampler of dataloader.
-        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
-    """
-
     def __init__(self, config, dataset, sampler, shuffle=False):
         self._set_neg_sample_args(config, dataset, InputType.POINTWISE, config['eval_neg_sample_args'])
         if self.neg_sample_args['strategy'] == 'by':
@@ -158,8 +120,6 @@ class NegSampleEvalDataLoader(NegSampleDataLoader):
                 positive_i = torch.cat((positive_i, self.dataset[index][self.iid_field]), 0)
 
             cur_data = cat_interactions(data_list)
-            # NumPy defaults Python integers to int32 on Windows, whereas
-            # PyTorch advanced indexing requires int64 indices.
             idx_list = torch.tensor(idx_list, dtype=torch.int64)
             positive_u = torch.tensor(positive_u, dtype=torch.int64)
 
@@ -173,17 +133,6 @@ class NegSampleEvalDataLoader(NegSampleDataLoader):
 
 
 class FullSortEvalDataLoader(AbstractDataLoader):
-    """:class:`FullSortEvalDataLoader` is a dataloader for full-sort evaluation. In order to speed up calculation,
-    this dataloader would only return then user part of interactions, positive items and used items.
-    It would not return negative items.
-
-    Args:
-        config (Config): The config of dataloader.
-        dataset (Dataset): The dataset of dataloader.
-        sampler (Sampler): The sampler of dataloader.
-        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
-    """
-
     def __init__(self, config, dataset, sampler, shuffle=False):
         self.uid_field = dataset.uid_field
         self.iid_field = dataset.iid_field

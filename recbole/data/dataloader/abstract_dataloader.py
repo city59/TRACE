@@ -1,17 +1,3 @@
-# @Time   : 2020/7/7
-# @Author : Yupeng Hou
-# @Email  : houyupeng@ruc.edu.cn
-
-# UPDATE
-# @Time   : 2020/10/22, 2020/9/23
-# @Author : Yupeng Hou, Yushuo Chen
-# @email  : houyupeng@ruc.edu.cn, chenyushuo@ruc.edu.cn
-
-"""
-recbole.data.dataloader.abstract_dataloader
-################################################
-"""
-
 import math
 from logging import getLogger
 
@@ -22,24 +8,6 @@ from recbole.utils import InputType, FeatureType, FeatureSource
 
 
 class AbstractDataLoader:
-    """:class:`AbstractDataLoader` is an abstract object which would return a batch of data which is loaded by
-    :class:`~recbole.data.interaction.Interaction` when it is iterated.
-    And it is also the ancestor of all other dataloader.
-
-    Args:
-        config (Config): The config of dataloader.
-        dataset (Dataset): The dataset of dataloader.
-        sampler (Sampler): The sampler of dataloader.
-        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
-
-    Attributes:
-        dataset (Dataset): The dataset of this dataloader.
-        shuffle (bool): If ``True``, dataloader will shuffle before every epoch.
-        pr (int): Pointer of dataloader.
-        step (int): The increment of :attr:`pr` for each batch.
-        batch_size (int): The max interaction number for all batch.
-    """
-
     def __init__(self, config, dataset, sampler, shuffle=False):
         self.config = config
         self.logger = getLogger()
@@ -51,7 +19,6 @@ class AbstractDataLoader:
         self._init_batch_size_and_step()
 
     def _init_batch_size_and_step(self):
-        """Initializing :attr:`step` and :attr:`batch_size`."""
         raise NotImplementedError('Method [init_batch_size_and_step] should be implemented')
 
     def __len__(self):
@@ -70,45 +37,21 @@ class AbstractDataLoader:
 
     @property
     def pr_end(self):
-        """This property marks the end of dataloader.pr which is used in :meth:`__next__`."""
         raise NotImplementedError('Method [pr_end] should be implemented')
 
     def _shuffle(self):
-        """Shuffle the order of data, and it will be called by :meth:`__iter__` if self.shuffle is True.
-        """
         raise NotImplementedError('Method [shuffle] should be implemented.')
 
     def _next_batch_data(self):
-        """Assemble next batch of data in form of Interaction, and return these data.
-
-        Returns:
-            Interaction: The next batch of data.
-        """
         raise NotImplementedError('Method [next_batch_data] should be implemented.')
 
     def set_batch_size(self, batch_size):
-        """Reset the batch_size of the dataloader, but it can't be called when dataloader is being iterated.
-
-        Args:
-            batch_size (int): the new batch_size of dataloader.
-        """
         if self.pr != 0:
             raise PermissionError('Cannot change dataloader\'s batch_size while iteration')
         self.batch_size = batch_size
 
 
 class NegSampleDataLoader(AbstractDataLoader):
-    """:class:`NegSampleDataLoader` is an abstract class which can sample negative examples by ratio.
-    It has two neg-sampling method, the one is 1-by-1 neg-sampling (pair wise),
-    and the other is 1-by-multi neg-sampling (point wise).
-
-    Args:
-        config (Config): The config of dataloader.
-        dataset (Dataset): The dataset of dataloader.
-        sampler (Sampler): The sampler of dataloader.
-        shuffle (bool, optional): Whether the dataloader will be shuffle after a round. Defaults to ``False``.
-    """
-
     def __init__(self, config, dataset, sampler, shuffle=True):
         super().__init__(config, dataset, sampler, shuffle=shuffle)
 

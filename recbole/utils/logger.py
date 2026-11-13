@@ -1,18 +1,3 @@
-# -*- coding: utf-8 -*-
-# @Time   : 2020/8/7
-# @Author : Zihan Lin
-# @Email  : linzihan.super@foxmail.com
-
-# UPDATE
-# @Time   : 2021/3/7
-# @Author : Jiawei Guan
-# @Email  : guanjw@ruc.edu.cn
-
-"""
-recbole.utils.logger
-###############################
-"""
-
 import logging
 import os
 import colorlog
@@ -30,7 +15,6 @@ log_colors_config = {
 
 
 class RemoveColorFilter(logging.Filter):
-
     def filter(self, record):
         if record:
             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -54,19 +38,6 @@ def set_color(log, color, highlight=True):
 
 
 def init_logger(config, log_root=None):
-    """
-    A logger that can show a message on standard output and write it into the
-    file named `filename` simultaneously.
-    All the message that you want to log MUST be str.
-
-    Args:
-        config (Config): An instance object of Config, used to record parameter information.
-
-    Example:
-        >>> logger = logging.getLogger(config)
-        >>> logger.debug(train_state)
-        >>> logger.info(train_result)
-    """
     init(autoreset=True)
     LOGROOT = './log_new/'
     if log_root is not None:
