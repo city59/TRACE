@@ -6,7 +6,7 @@ A GRU first encodes the multi-behavior history into contextual states. For every
 
 | Paper section | Code (`trace.py`) |
 |---|---|
-| 4.2 Historical Interaction Encoding | `_encode_history`, `_candidate_representation` |
+| 4.2 Interaction Encoding | `_encode_history`, `_candidate_representation` |
 | 4.3 Path Utility and Selection | `_transition_utility`, `_candidate_utilities`, `_ranked_paths` |
 | 4.4 Structure-Guided Path Transformer | `_log_suffix_weights`, `PathTransformerBlock`, `_score` |
 | 4.5 Recommendation and Training | `_score`, `calculate_loss` |
