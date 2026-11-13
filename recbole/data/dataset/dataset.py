@@ -27,7 +27,6 @@ from scipy.sparse import coo_matrix
 
 from recbole.data.interaction import Interaction
 from recbole.utils import FeatureSource, FeatureType, get_local_time, set_color
-from recbole.utils.url import decide_download, download_url, extract_zip, makedirs, rename_atomic_files
 
 
 class Dataset(object):
@@ -198,40 +197,6 @@ class Dataset(object):
                     feat_name_list.append(f'{suf}_feat')
         return feat_name_list
 
-    def _get_download_url(self, url_file, allow_none=False):
-        current_path = os.path.dirname(os.path.realpath(__file__))
-        with open(os.path.join(current_path, f'../../properties/dataset/{url_file}.yaml')) as f:
-            dataset2url = yaml.load(f.read(), Loader=self.config.yaml_loader)
-
-        if self.dataset_name in dataset2url:
-            url = dataset2url[self.dataset_name]
-            return url
-        elif allow_none:
-            return None
-        else:
-            raise ValueError(
-                f'Neither [{self.dataset_path}] exists in the device'
-                f'nor [{self.dataset_name}] a known dataset name.'
-            )
-
-    def _download(self):
-        url = self._get_download_url('url')
-        self.logger.info(f'Prepare to download dataset [{self.dataset_name}] from [{url}].')
-
-        if decide_download(url):
-            makedirs(self.dataset_path)
-            path = download_url(url, self.dataset_path)
-            extract_zip(path, self.dataset_path)
-            os.unlink(path)
-
-            basename = os.path.splitext(os.path.basename(path))[0]
-            rename_atomic_files(self.dataset_path, basename, self.dataset_name)
-
-            self.logger.info('Downloading done.')
-        else:
-            self.logger.info('Stop download.')
-            exit(-1)
-
     def _load_data(self, token, dataset_path):
         """Load features.
 
@@ -243,7 +208,9 @@ class Dataset(object):
             dataset_path (str): path of dataset dir.
         """
         if not os.path.exists(dataset_path):
-            self._download()
+            raise ValueError(
+                f'[{dataset_path}] does not exist; build it with scripts/preprocess.py.'
+            )
         self._load_inter_feat(token, dataset_path)
         self.user_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.USER, 'uid_field')
         self.item_feat = self._load_user_or_item_feat(token, dataset_path, FeatureSource.ITEM, 'iid_field')

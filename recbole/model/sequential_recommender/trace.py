@@ -1,30 +1,32 @@
 # -*- coding: utf-8 -*-
-"""TRACE: Target Reasoning via Adaptive Combinatorial Evidence Optimization.
+"""TRACE: Tracing Candidate-Specific Evidence Paths.
 
-Implementation of the DASFAA submission "Target Reasoning via Adaptive
-Combinatorial Evidence Optimization for Recommendation".  Equation numbers in
-the comments refer to that paper.
+Implementation of the DASFAA submission "TRACE: Tracing Candidate-Specific
+Evidence Paths for Multi-Behavior Sequential Recommendation".  Equation,
+section and algorithm numbers in the comments refer to that paper.
 
 Pipeline for a history S_u = ((i^1, b^1, theta^1), ..., (i^L, b^L, theta^L))
-and a candidate item c:
+and a candidate c:
 
 1. Historical interaction encoding (Sec. 4.2)
        e^l = e_i + e_b,  h^l = GRU(e^l, h^{l-1}),  dh^l = h^l - h^{l-1},
        m^l = A_{b^l} dh^l,  z_c = e_c + e_{b*}.
-2. Path utility (Eqs. 1-4)
+2. Path utility (Sec. 4.3, Eqs. 1-4)
        N^l(c)   = cos(z_c, m^l) - lambda_len
        E^{p,l}  = cos(dh^p, dh^l) - lambda_tr[b^p, b^l] log(1 + theta^l - theta^p)
        F^l(c)   = cos(z_c, h^l) - lambda_end[b^l] log(1 + theta^L - theta^l)
        U(P, c)  = sum_{j<K} N^{l_j} + sum_{j>=2} E^{l_{j-1}, l_j} + F^{l_K}.
-3. Exact ranked-path DP (Eqs. 6-8): the MAP path and the Omega best
-   alternatives.  Path indices are recomputed every forward pass and are not
-   differentiated; their utilities are.
-4. Suffix DP over the full path space (Eqs. 9-10): conditional next-link
-   probabilities eta^{p,l}(c).
-5. Structure-guided path transformer (Eqs. 11-12) with candidate-conditioned
-   queries and the structural bias log R^{j,k}.
+3. Path selection (Sec. 4.3, Eqs. 5-6, Algorithm 1): a forward ranked-path DP
+   returns the MAP path and the Omega best alternatives.  Path indices are
+   recomputed every forward pass and are not differentiated; their utilities
+   are.
+4. Connection probabilities (Sec. 4.4, Eqs. 7-8): a suffix DP over the full
+   path space gives eta^{p,l}(c), the probability that l is the next selected
+   position after p.
+5. Structure-guided path transformer (Sec. 4.4, Eqs. 9-10) with
+   candidate-conditioned queries and the structural bias log R^{j,k}.
 6. MAP / utility-weighted soft branches, learned gate and cosine score
-   (Eqs. 13-15), trained with the BCE objective of Eq. (16).
+   (Sec. 4.5, Eqs. 11-13), trained with the BCE objective of Eq. (14).
 """
 
 import math
@@ -42,37 +44,21 @@ from recbole.utils import InputType
 # produce NaN gradients in logsumexp/softmax rows that are entirely masked.
 LOG_ZERO = -1e9
 
-ABLATIONS = (
-    'none',
-    'wo_N',        # N^l(c) = 0
-    'wo_E',        # E^{p,l} = 0
-    'wo_F',        # F^l(c) = 0
-    'map_only',    # Omega = 0
-    'soft_only',   # remove the MAP branch from the score
-    'wo_bias',     # remove log R^{j,k} from attention
-    'wo_cq',       # remove z_c from the attention query
-    'wo_tf',       # remove the path transformer
-    'wo_gru',      # cumulative sums of interaction embeddings instead of GRU
-    'shared_A',    # one projection A shared across behaviors
-)
-
-
 class PathTransformerBlock(nn.Module):
-    """One block of the structure-guided path transformer (Eq. 12)."""
+    """One block of the structure-guided path transformer (Eq. 10)."""
 
     def __init__(self, hidden_size, n_heads, inner_size, dropout_prob,
-                 layer_norm_eps, candidate_query=True):
+                 layer_norm_eps):
         super(PathTransformerBlock, self).__init__()
         self.n_heads = n_heads
         # Each head projects to ceil(d/H) dimensions so that H need not divide
         # d; the concatenated heads are mapped back to d by the output
-        # projection.  Scores are scaled by sqrt(d/H) as in Eq. (12).
+        # projection.  Scores are scaled by sqrt(d/H) as in Eq. (10).
         self.head_size = math.ceil(hidden_size / n_heads)
         self.attention_size = self.head_size * n_heads
         self.scale = math.sqrt(hidden_size / n_heads)
-        self.candidate_query = candidate_query
-        query_input = 2 * hidden_size if candidate_query else hidden_size
-        self.query = nn.Linear(query_input, self.attention_size)
+        # The query reads [x^j || z_c] (Eq. 10).
+        self.query = nn.Linear(2 * hidden_size, self.attention_size)
         self.key = nn.Linear(hidden_size, self.attention_size)
         self.value = nn.Linear(hidden_size, self.attention_size)
         self.output = nn.Linear(self.attention_size, hidden_size)
@@ -100,12 +86,9 @@ class PathTransformerBlock(nn.Module):
                 (k > j or padded) entries.
         """
         n, k, d = x.shape
-        if self.candidate_query:
-            query_input = torch.cat(
-                (x, candidate.unsqueeze(1).expand(-1, k, -1)), dim=-1
-            )
-        else:
-            query_input = x
+        query_input = torch.cat(
+            (x, candidate.unsqueeze(1).expand(-1, k, -1)), dim=-1
+        )
         query = self._split_heads(self.query(query_input))
         key = self._split_heads(self.key(x))
         value = self._split_heads(self.value(x))
@@ -123,7 +106,7 @@ class PathTransformerBlock(nn.Module):
 
 
 class TRACE(SequentialRecommender):
-    """Candidate-specific combinatorial evidence optimization (TRACE)."""
+    """Candidate-specific evidence paths for multi-behavior recommendation (TRACE)."""
 
     input_type = InputType.POINTWISE
 
@@ -141,21 +124,11 @@ class TRACE(SequentialRecommender):
         self.train_neg_num = max(int(config['train_neg_num']), 1)
         self.candidate_chunk_size = max(int(config['candidate_chunk_size']), 1)
         self.train_micro_batch = max(int(config['train_micro_batch'] or 256), 1)
-        self.ablation = str(config['trace_ablation'] or 'none')
-        if self.ablation not in ABLATIONS:
-            raise ValueError(
-                'Unknown trace_ablation {!r}; choose from {}.'.format(
-                    self.ablation, ABLATIONS
-                )
-            )
         if self.tau <= 0:
             raise ValueError('path_temperature must be positive.')
-        omega = int(config['max_alternatives'])
-        if self.ablation == 'map_only':
-            omega = 0
-        if self.ablation == 'soft_only' and omega < 1:
-            raise ValueError('soft_only requires max_alternatives >= 1.')
-        self.omega = max(omega, 0)
+        self.omega = int(config['max_alternatives'])
+        if self.omega < 0:
+            raise ValueError('max_alternatives must be non-negative.')
 
         self.num_behaviors = int(dataset.num('item_type_list'))
         target_token = str(config['target_behavior_token'] or '0')
@@ -178,9 +151,8 @@ class TRACE(SequentialRecommender):
         self.gru = nn.GRU(d, d, batch_first=True)
 
         # A_b in R^{d x d}, indexed only by the observed behavior (Sec. 4.2).
-        projection_count = 1 if self.ablation == 'shared_A' else self.num_behaviors
         self.behavior_projection = nn.Parameter(
-            torch.empty(projection_count, d, d)
+            torch.empty(self.num_behaviors, d, d)
         )
 
         # Non-negative structural cost coefficients, lambda = softplus(raw).
@@ -197,11 +169,10 @@ class TRACE(SequentialRecommender):
             PathTransformerBlock(
                 d, self.n_heads, self.inner_size, self.dropout_prob,
                 self.layer_norm_eps,
-                candidate_query=self.ablation != 'wo_cq',
             )
             for _ in range(self.n_blocks)
         ])
-        # w_gamma in R^{3d}, b_gamma in R (Eq. 14).
+        # w_gamma in R^{3d}, b_gamma in R (Eq. 12).
         self.gate = nn.Linear(3 * d, 1)
 
         self._reset_parameters()
@@ -232,42 +203,34 @@ class TRACE(SequentialRecommender):
         width = int(lengths.max().item())
         item_seq = item_seq[:, :width]
         type_seq = type_seq[:, :width]
-        if time_seq is not None:
-            time_seq = time_seq[:, :width].float()
-        else:
-            # Without recorded timestamps the historical position is used as a
-            # consistent time unit.
-            time_seq = torch.arange(
-                width, device=item_seq.device, dtype=torch.float
-            ).unsqueeze(0).expand(item_seq.size(0), -1)
+        if time_seq is None:
+            raise ValueError(
+                'TRACE needs interaction timestamps (item_time_list); build the '
+                'datasets with scripts/preprocess.py.'
+            )
+        time_seq = time_seq[:, :width].float()
         return item_seq, type_seq, time_seq, lengths
 
     def _encode_history(self, item_seq, type_seq, lengths):
         """Return contextual states h, state changes dh and messages m."""
         e = self.item_embedding(item_seq) + self.behavior_embedding(type_seq)
-        if self.ablation == 'wo_gru':
-            h = torch.cumsum(e, dim=1)
-        else:
-            packed = nn.utils.rnn.pack_padded_sequence(
-                e, lengths.cpu(), batch_first=True, enforce_sorted=False
-            )
-            packed_h, _ = self.gru(packed)
-            h, _ = nn.utils.rnn.pad_packed_sequence(
-                packed_h, batch_first=True, total_length=e.size(1)
-            )
+        packed = nn.utils.rnn.pack_padded_sequence(
+            e, lengths.cpu(), batch_first=True, enforce_sorted=False
+        )
+        packed_h, _ = self.gru(packed)
+        h, _ = nn.utils.rnn.pad_packed_sequence(
+            packed_h, batch_first=True, total_length=e.size(1)
+        )
         h_prev = F.pad(h[:, :-1], (0, 0, 1, 0))  # h^0 = 0
         dh = h - h_prev
 
-        if self.ablation == 'shared_A':
-            m = F.linear(dh, self.behavior_projection[0])
-        else:
-            m = torch.zeros_like(dh)
-            for behavior in range(1, self.num_behaviors):
-                mask = type_seq.eq(behavior)
-                if mask.any():
-                    m = m + F.linear(
-                        dh, self.behavior_projection[behavior]
-                    ) * mask.unsqueeze(-1)
+        m = torch.zeros_like(dh)
+        for behavior in range(1, self.num_behaviors):
+            mask = type_seq.eq(behavior)
+            if mask.any():
+                m = m + F.linear(
+                    dh, self.behavior_projection[behavior]
+                ) * mask.unsqueeze(-1)
         return h, dh, m
 
     def _candidate_representation(self, candidates):
@@ -279,47 +242,37 @@ class TRACE(SequentialRecommender):
     # ------------------------------------------------------------------
     def _transition_utility(self, dh, type_seq, time_seq, valid):
         """E^{p,l}, shared across candidates.  Shape [B, L, L] (p, l)."""
-        batch_size, length = type_seq.shape
+        length = type_seq.size(1)
         positions = torch.arange(length, device=type_seq.device)
         forward_edge = (
             positions.view(1, -1, 1) < positions.view(1, 1, -1)
         ) & valid.unsqueeze(2) & valid.unsqueeze(1)
-        if self.ablation == 'wo_E':
-            edge = dh.new_zeros(batch_size, length, length)
-        else:
-            dh_unit = F.normalize(dh, dim=-1)
-            similarity = torch.bmm(dh_unit, dh_unit.transpose(1, 2))
-            decay = F.softplus(self.lambda_tr_raw)[
-                type_seq.unsqueeze(2), type_seq.unsqueeze(1)
-            ]
-            gap = (time_seq.unsqueeze(1) - time_seq.unsqueeze(2)).clamp_min(0.0)
-            edge = similarity - decay * torch.log1p(gap)
+        dh_unit = F.normalize(dh, dim=-1)
+        similarity = torch.bmm(dh_unit, dh_unit.transpose(1, 2))
+        decay = F.softplus(self.lambda_tr_raw)[
+            type_seq.unsqueeze(2), type_seq.unsqueeze(1)
+        ]
+        gap = (time_seq.unsqueeze(1) - time_seq.unsqueeze(2)).clamp_min(0.0)
+        edge = similarity - decay * torch.log1p(gap)
         return edge.masked_fill(~forward_edge, LOG_ZERO), forward_edge
 
     def _candidate_utilities(self, z, h, m, type_seq, time_seq, lengths, valid):
         """N^l(c) and F^l(c).  Shapes [B, C, L]."""
-        batch_size, length = type_seq.shape
         z_unit = F.normalize(z, dim=-1)
-        if self.ablation == 'wo_N':
-            node = z.new_zeros(batch_size, z.size(1), length)
-        else:
-            m_unit = F.normalize(m, dim=-1)
-            node = torch.einsum('bcd,bld->bcl', z_unit, m_unit)
-            node = node - F.softplus(self.lambda_len_raw)
-        if self.ablation == 'wo_F':
-            endpoint = z.new_zeros(batch_size, z.size(1), length)
-        else:
-            h_unit = F.normalize(h, dim=-1)
-            last_time = time_seq.gather(1, (lengths - 1).unsqueeze(1))
-            age = (last_time - time_seq).clamp_min(0.0)
-            decay = F.softplus(self.lambda_end_raw)[type_seq]
-            endpoint = torch.einsum('bcd,bld->bcl', z_unit, h_unit)
-            endpoint = endpoint - (decay * torch.log1p(age)).unsqueeze(1)
+        m_unit = F.normalize(m, dim=-1)
+        node = torch.einsum('bcd,bld->bcl', z_unit, m_unit)
+        node = node - F.softplus(self.lambda_len_raw)
+        h_unit = F.normalize(h, dim=-1)
+        last_time = time_seq.gather(1, (lengths - 1).unsqueeze(1))
+        age = (last_time - time_seq).clamp_min(0.0)
+        decay = F.softplus(self.lambda_end_raw)[type_seq]
+        endpoint = torch.einsum('bcd,bld->bcl', z_unit, h_unit)
+        endpoint = endpoint - (decay * torch.log1p(age)).unsqueeze(1)
         mask = ~valid.unsqueeze(1)
         return node.masked_fill(mask, LOG_ZERO), endpoint.masked_fill(mask, LOG_ZERO)
 
     # ------------------------------------------------------------------
-    # Sec. 4.3 Path selection, Eqs. (6)-(8)
+    # Sec. 4.3 Path selection, Eq. (6) and Algorithm 1
     # ------------------------------------------------------------------
     @torch.no_grad()
     def _ranked_paths(self, node, edge, endpoint, valid):
@@ -402,7 +355,7 @@ class TRACE(SequentialRecommender):
         return positions, path_len
 
     # ------------------------------------------------------------------
-    # Sec. 4.3 Connection probabilities, Eqs. (9)-(10)
+    # Sec. 4.4 Connection probabilities, Eqs. (7)-(8)
     # ------------------------------------------------------------------
     def _log_suffix_weights(self, node, edge, endpoint, valid):
         """log beta^l(c) for every position, computed in reverse order."""
@@ -428,7 +381,7 @@ class TRACE(SequentialRecommender):
         return torch.stack(log_beta, dim=-1)
 
     # ------------------------------------------------------------------
-    # Scoring a candidate set, Eqs. (11)-(15)
+    # Secs. 4.4-4.5 Scoring a candidate set, Eqs. (9)-(13)
     # ------------------------------------------------------------------
     def _score(self, h, dh, m, type_seq, time_seq, lengths, valid,
                edge, candidates):
@@ -479,7 +432,7 @@ class TRACE(SequentialRecommender):
         )
         utility = utility.masked_fill(~path_exists, LOG_ZERO)
 
-        # Next-link log-probabilities log eta^{l_v, l_{v+1}}(c), Eq. (10).
+        # Connection log-probabilities log eta^{l_v, l_{v+1}}(c), Eq. (8).
         log_beta = self._log_suffix_weights(node, edge, endpoint, valid)
         log_eta = (
             (node_on_path[..., :-1] + edge_on_path) / self.tau
@@ -488,15 +441,13 @@ class TRACE(SequentialRecommender):
         )
         log_eta = log_eta * link_mask
 
-        # Structural bias log R^{j,k} = sum_{v=k}^{j-1} log eta, Eq. (11).
+        # Structural bias log R^{j,k} = sum_{v=k}^{j-1} log eta, Eq. (9).
         cumulative = F.pad(torch.cumsum(log_eta, dim=-1), (1, 0))
         log_r = cumulative.unsqueeze(-1) - cumulative.unsqueeze(-2)
         causal = torch.tril(torch.ones(
             max_len, max_len, dtype=torch.bool, device=paths.device
         ))
         attend = causal & step_mask.unsqueeze(-2)
-        if self.ablation == 'wo_bias':
-            log_r = torch.zeros_like(log_r)
         attention_bias = log_r.masked_fill(~attend, LOG_ZERO)
 
         # Path-position inputs x^j = m^{l_j} + p_{l_j}.
@@ -509,25 +460,19 @@ class TRACE(SequentialRecommender):
             max=self.max_seq_length - 1
         )
         x = messages + self.position_embedding(position_ids)
-        flat_step_mask = step_mask.reshape(path_count, max_len)
         flat_len = path_len.reshape(path_count)
         flat_endpoint = endpoint_index.reshape(path_count)
 
-        if self.ablation == 'wo_tf':
-            weights = flat_step_mask.float()
-            path_repr = (x * weights.unsqueeze(-1)).sum(1) / weights.sum(
-                1, keepdim=True
-            ).clamp_min(1.0)
-        else:
-            z_flat = z.unsqueeze(2).expand(-1, -1, beam, -1).reshape(path_count, d)
-            bias_flat = attention_bias.reshape(path_count, max_len, max_len)
-            for block in self.blocks:
-                x = block(x, z_flat, bias_flat)
-            path_repr = x[torch.arange(path_count, device=x.device), flat_endpoint]
+        z_flat = z.unsqueeze(2).expand(-1, -1, beam, -1).reshape(path_count, d)
+        bias_flat = attention_bias.reshape(path_count, max_len, max_len)
+        for block in self.blocks:
+            x = block(x, z_flat, bias_flat)
+        # r_u(P, c): the embedding at the endpoint position K.
+        path_repr = x[torch.arange(path_count, device=x.device), flat_endpoint]
         path_repr = path_repr * flat_len.gt(0).unsqueeze(-1)
         path_repr = path_repr.view(batch_size, candidate_count, beam, d)
 
-        # MAP and utility-weighted soft branches, Eq. (13).
+        # MAP and utility-weighted soft branches, Eq. (11).
         r_map = path_repr[:, :, 0]
         score_map = F.cosine_similarity(r_map, z, dim=-1)
         if self.omega == 0:
@@ -541,14 +486,11 @@ class TRACE(SequentialRecommender):
         r_soft = (rho.unsqueeze(-1) * path_repr[:, :, 1:]).sum(dim=2)
         score_soft = F.cosine_similarity(r_soft, z, dim=-1)
 
-        if self.ablation == 'soft_only':
-            score = score_soft
-        else:
-            # Candidate-dependent gate, Eqs. (14)-(15).
-            gamma = torch.sigmoid(
-                self.gate(torch.cat((r_map, r_soft, z), dim=-1))
-            ).squeeze(-1)
-            score = gamma * score_map + (1.0 - gamma) * score_soft
+        # Candidate-dependent gate and score, Eqs. (12)-(13).
+        gamma = torch.sigmoid(
+            self.gate(torch.cat((r_map, r_soft, z), dim=-1))
+        ).squeeze(-1)
+        score = gamma * score_map + (1.0 - gamma) * score_soft
         # When Omega_u = 0 (a single feasible path) only the MAP branch exists.
         return torch.where(has_alternative, score, score_map)
 
@@ -569,7 +511,7 @@ class TRACE(SequentialRecommender):
         return torch.cat(blocks, dim=1)
 
     # ------------------------------------------------------------------
-    # Sec. 4.5 Training objective, Eq. (16)
+    # Sec. 4.5 Training objective, Eq. (14)
     # ------------------------------------------------------------------
     def _sample_negatives(self, positives):
         """Uniformly sampled negatives from I \\ {c+} (distinct per row)."""
@@ -674,6 +616,15 @@ class TRACE(SequentialRecommender):
         return F.pad(scores, (1, 0), value=-float('inf'))
 
     def customized_sort_predict(self, interaction):
-        raise NotImplementedError(
-            'TRACE scores the candidates supplied by RecBole; set customized_eval=0.'
+        """Scores [B, 1 + n] of the positive (column 0) and its stored negatives.
+
+        Every validation/test target carries the popularity-sampled negatives
+        fixed by scripts/preprocess.py in ``neg_item_list`` (Sec. 5.1).
+        """
+        candidates = torch.cat(
+            (interaction[self.ITEM_ID].unsqueeze(1), interaction['neg_item_list']), dim=1
+        )
+        return self.candidate_scores(
+            interaction[self.ITEM_SEQ], interaction['item_type_list'], candidates,
+            self._time_sequence(interaction),
         )
