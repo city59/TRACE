@@ -72,7 +72,6 @@ class TRACE(SequentialRecommender):
         self.inner_size = int(config['inner_size'])
         self.dropout_prob = float(config['dropout_prob'])
         self.layer_norm_eps = float(config['layer_norm_eps'])
-        self.reg_weight = float(config['reg_weight'])
         self.train_neg_num = max(int(config['train_neg_num']), 1)
         self.candidate_chunk_size = max(int(config['candidate_chunk_size']), 1)
         self.train_micro_batch = max(int(config['train_micro_batch'] or 256), 1)
@@ -460,11 +459,7 @@ class TRACE(SequentialRecommender):
                 chunks.append(score_rows(anchor))
         scores = torch.cat(chunks, dim=0)
         loss = F.softplus(-scores[:, 0]) + F.softplus(scores[:, 1:]).mean(dim=1)
-        loss = loss.mean()
-        if self.reg_weight > 0:
-            l2 = sum(p.pow(2).sum() for p in self.parameters() if p.requires_grad)
-            loss = loss + self.reg_weight * l2
-        return loss
+        return loss.mean()
 
     def predict(self, interaction):
         item_seq = interaction[self.ITEM_SEQ]

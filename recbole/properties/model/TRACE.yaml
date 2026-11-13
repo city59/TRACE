@@ -2,7 +2,6 @@ hidden_size: 64
 path_temperature: 0.4
 n_path_blocks: 2
 max_alternatives: 6
-reg_weight: 0.0001
 target_behavior_token: '0'
 
 n_heads: 10

@@ -58,7 +58,7 @@ def main():
         'min_delta': 0.0,
         'learner': 'adamw',
         'learning_rate': 1e-3,
-        'weight_decay': 0.0,
+        'weight_decay': 1e-4,
         'train_batch_size': 2048,
         'eval_batch_size': args.eval_batch_size,
         'train_micro_batch': args.micro_batch,
@@ -110,7 +110,7 @@ def main():
             'seed': SEED,
             'hyperparameters': {key: config[key] for key in (
                 'path_temperature', 'n_path_blocks', 'max_alternatives', 'learning_rate',
-                'train_batch_size', 'hidden_size', 'reg_weight', 'train_neg_num')},
+                'train_batch_size', 'hidden_size', 'weight_decay', 'train_neg_num')},
             'best_valid_score': float(best_valid_score),
             'best_valid_result': dict(best_valid_result),
             'test_result': dict(test_result),

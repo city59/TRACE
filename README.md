@@ -73,11 +73,10 @@ All settings are fixed; the command line only selects the dataset, the GPU and m
 
 | Parameter | Value |
 |---|---|
-| Optimizer | AdamW, learning rate 1e-3 |
+| Optimizer | AdamW, learning rate 1e-3, weight decay 1e-4 |
 | Embedding size d | 64 |
 | Batch size | 2048 |
 | Initialization | Xavier |
-| L2 coefficient λ_reg | 1e-4 (added to the loss, Eq. 14) |
 
 Per-dataset values (Sec. 5.4), set in `run_TRACE.py`:
 
