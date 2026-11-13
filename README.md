@@ -95,12 +95,3 @@ Per-dataset values (Sec. 5.4), set in `run_TRACE.py`:
 | `recbole/model/sequential_recommender/trace.py` | TRACE model (Eqs. 1–14, Algorithm 1) |
 | `recbole/properties/model/TRACE.yaml` | model settings |
 | `recbole/` (other files) | RecBole data loading, training loop and HR/NDCG evaluation |
-
-## Implementation notes
-
-The paper does not fix these settings. The defaults below are implementation choices:
-
-- 10 attention heads per block. Since 64 is not divisible by 10, each head has ceil(64/10) = 7 dimensions (70 in total), the output projection maps back to 64, and scores are scaled by sqrt(d/H) as in Eq. 10. Feed-forward width is 256 and dropout is 0.1.
-- 1 uniformly sampled training negative per positive.
-- Early stopping on validation NDCG@10 with patience 10, at most 200 epochs.
-- Each batch of 2048 is processed in gradient-checkpointed micro-batches (`--micro_batch`) to fit in GPU memory. This is still one optimizer step per batch.
